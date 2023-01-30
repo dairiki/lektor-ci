@@ -1,0 +1,44 @@
+name: Build and publish Lektor Website
+
+on: push
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      LEKTOR_PROJECT: Quickstart.lektorproject
+      LEKTOR_OUTPUT_PATH: _build
+    steps:
+      - uses: actions/checkout@v3
+        # with:
+        #   fetch-depth: 0
+
+      - uses: actions/setup-python@v4
+        id: cpython
+        with:
+          python-version: "3.10"
+          # cache pip cache, keyed on requirements.txt
+          cache: "pip"
+
+      - uses: actions/cache@v3
+        # cache lektor output. load the most recent cache,
+        # but write a new cache every run.
+        with:
+          path: ${{ env.LEKTOR_OUTPUT_PATH }}
+          key: "lektor-${{ github.ref_name }}-${{ github.run_number }}"
+          restore-keys: "lektor-${{ github.ref_name }}-"
+
+      - name: Install requirements.txt
+        run: |
+          python -m pip install -U pip
+          python -m pip install -r requirements.txt
+
+      - run: pip freeze | paste -sd , -
+      - run: convert --version
+
+      - run: lektor build
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: html
+          path: ${{ env.LEKTOR_OUTPUT_PATH }}
