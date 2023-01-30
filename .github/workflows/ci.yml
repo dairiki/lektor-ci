@@ -1,0 +1,17 @@
+name: Build and publish Lektor Website
+
+on: push
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+    with:
+      python-version: "3.10"
+
+  deploy:
+    needs: build
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: staging
+    secrets:
+      ssh-key: ${{ secrets.RSYNC_SSH_KEY }}

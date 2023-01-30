@@ -1,0 +1,74 @@
+name: Deploy HTML from workflow artifact using rsync
+
+# NOTE: We run rsync with StrictHostKeyChecking disabled.
+# (Do we care if a MITM gets our HTML?)
+
+# For notes on working with environment secrets in reusable workflows, see:
+# https://colinsalmcorner.com/consuming-environment-secrets-in-reusable-workflows/
+
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_call:
+    inputs:
+      rsync-dest:
+        type: string
+        required: false
+        description: >
+          Destination for rsync deployment.
+
+          Default: taken from vars.RSYNC_DEST
+
+      environment:
+        type: string
+        required: false
+        description: >
+          Environment to pull secrets and variables from.
+
+      environment-url:
+        type: string
+        required: false
+        description: >
+          Environment URL (displayed on actions status page — only
+          works if environment is specified).
+
+          Default: vars.URL
+
+      artifact-name:
+        type: string
+        required: false
+        default: "htdocs"
+        description: Name of workflow artifact to retrieve htdocs from.
+
+    secrets:
+      ssh-key:
+        description: SSH private key for deployment
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ inputs.environment-url || vars.URL }}
+    steps:
+      - uses: actions/download-artifact@v3
+        with:
+          name: ${{ inputs.artifact-name }}
+
+      - name: Start SSH agent
+        run: ssh-agent | sed -n 's/;.*//; /^SSH_[^ ]*=/ p' >> "$GITHUB_ENV"
+
+      - name: Add SSH key to agent
+        run: ssh-add - <<< "${{ secrets.ssh-key }}"
+
+      - run: tree -a
+
+      - name: Run rsync to deploy site
+        run: >-
+          rsync --recursive --checksum --links --verbose --delete-delay
+          ./ "${{ inputs.rsync-dest || vars.RSYNC_DEST }}"
+        env:
+          RSYNC_RSH: ssh -o StrictHostKeyChecking=off

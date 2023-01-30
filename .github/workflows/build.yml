@@ -1,32 +1,72 @@
-name: Build and publish Lektor Website
+name: Build Lektor website
+#
+# This workflow, essentially does
+#
+#    pip install -r requirements.txt
+#    lektor build
+#
+# Then saves the resulting HTML to an workflow artifact.
+#
+# It also configures caching of the pip wheel cache, and caching
+# of the Lektor output directory in hopes that this will speed up
+# build times for repeated builds.
+#
+# Note that for best results your requirements.txt file should be
+# quite explicit. (The pip cache is reused and not regenerated until
+# the requirements.txt changes.) Using pip-compile (from pip-tools) to
+# generate your requirements.txt is a good idea.
+#
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        default: "3.10"
+        description: >
+          python version to use (should match the python version used
+          to generate your requirements.txt)
+        type: string
+        required: false
 
-on: push
+      artifact-name:
+        description: name of artifact to save built HTML
+        type: string
+        required: false
+        default: "htdocs"
+
+      fetch-depth:
+        description: >-
+          Number of commits to fetch. 0 indicates all history for all
+          branches and tags.
+
+          Default: 1
+        type: number
+        default: 1
+        required: false
+
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      LEKTOR_PROJECT: Quickstart.lektorproject
-      LEKTOR_OUTPUT_PATH: _build
     steps:
       - uses: actions/checkout@v3
-        # with:
-        #   fetch-depth: 0
+        with:
+          fetch-depth: ${{ inputs.fetch-depth }}
 
       - uses: actions/setup-python@v4
         id: cpython
         with:
-          python-version: "3.10"
-          # cache pip cache, keyed on requirements.txt
+          python-version: ${{ inputs.python-version }}
           cache: "pip"
 
       - uses: actions/cache@v3
         # cache lektor output. load the most recent cache,
         # but write a new cache every run.
         with:
-          path: ${{ env.LEKTOR_OUTPUT_PATH }}
+          path: htdocs
           key: "lektor-${{ github.ref_name }}-${{ github.run_number }}"
-          restore-keys: "lektor-${{ github.ref_name }}-"
+          restore-keys: |
+            lektor-${{ github.ref_name }}-
+            lektor-
 
       - name: Install requirements.txt
         run: |
@@ -36,9 +76,11 @@ jobs:
       - run: pip freeze | paste -sd , -
       - run: convert --version
 
-      - run: lektor build
+      - run: lektor build --output-path htdocs
 
       - uses: actions/upload-artifact@v3
         with:
-          name: html
-          path: ${{ env.LEKTOR_OUTPUT_PATH }}
+          name: ${{ inputs.artifact-name }}
+          path: |
+            htdocs
+            !**/.lektor
