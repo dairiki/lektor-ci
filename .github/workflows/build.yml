@@ -22,13 +22,14 @@ on:
       python-version:
         default: "3.10"
         description: >
-          python version to use (should match the python version used
-          to generate your requirements.txt)
+          Python version to use. (This should match the python version used
+          to generate your requirements.txt.)
         type: string
         required: false
 
       artifact-name:
-        description: name of artifact to save built HTML
+        description: >
+          Name of workflow artifact to which to save built HTML
         type: string
         required: false
         default: "htdocs"
@@ -37,8 +38,6 @@ on:
         description: >-
           Number of commits to fetch. 0 indicates all history for all
           branches and tags.
-
-          Default: 1
         type: number
         default: 1
         required: false
