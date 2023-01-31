@@ -42,10 +42,18 @@ on:
         default: 1
         required: false
 
+      lektor-project:
+        description: >-
+          Path to the .lektorproject file, or the directory containing it.
+        type: string
+        default: .
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      LEKTOR_PROJECT: ${{ inputs.lektor-project || '.' }}
+      LEKTOR_OUTPUT_PATH: /tmp/lektor-output
     steps:
       - uses: actions/checkout@v3
         with:
@@ -61,7 +69,7 @@ jobs:
         # cache lektor output. load the most recent cache,
         # but write a new cache every run.
         with:
-          path: htdocs
+          path: ${{ env.LEKTOR_OUTPUT_PATH }}
           key: "lektor-${{ github.ref_name }}-${{ github.run_number }}"
           restore-keys: |
             lektor-${{ github.ref_name }}-
@@ -75,11 +83,11 @@ jobs:
       - run: pip freeze | paste -sd , -
       - run: convert --version
 
-      - run: lektor build --output-path htdocs
+      - run: lektor build
 
       - uses: actions/upload-artifact@v3
         with:
           name: ${{ inputs.artifact-name }}
           path: |
-            htdocs
+            ${{ env.LEKTOR_OUTPUT_PATH }}
             !**/.lektor

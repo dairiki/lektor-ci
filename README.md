@@ -27,8 +27,11 @@ lektor build -O htdocs
 
 then it saves the results from `htdocs` in a workflow [artifact].
 
-As such, it expects a `requirements.txt` and your `.lektorproject`
-file to be in the top-level of your repository.
+As such, it expects a `requirements.txt` file to be in the top-level
+of your repository.  By default, your `.lektorproject` file is also
+expected to be in the top-level directory, but you can set the
+`lektor-project` input to the path to either the `.lektorproject` file
+to use, or to its directory.
 
 #### Caching
 
