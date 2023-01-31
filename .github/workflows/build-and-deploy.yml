@@ -1,0 +1,145 @@
+name: Build and Deploy Lektor website using rsync
+#
+# This workflow builds the website by doing
+#
+#    pip install -r requirements.txt
+#    lektor build
+#
+# Then (optionally) deploys the resulting HTML using rsync.
+#
+# It also configures caching of the pip wheel cache, and caching
+# of the Lektor output directory in hopes that this will speed up
+# build times for repeated builds.
+#
+# Note that for best results your requirements.txt file should be
+# quite explicit. (The pip cache is reused and not regenerated until
+# the requirements.txt changes.) Using pip-compile (from pip-tools) to
+# generate your requirements.txt is a good idea.
+#
+# NOTE: We run rsync with StrictHostKeyChecking disabled.
+# (Do we care if a MITM gets our HTML?)
+
+# For notes on working with environment secrets in reusable workflows, see:
+# https://colinsalmcorner.com/consuming-environment-secrets-in-reusable-workflows/
+#
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        default: "3.10"
+        description: >
+          Python version to use. (This should match the python version used
+          to generate your requirements.txt.)
+        type: string
+        required: false
+
+      fetch-depth:
+        description: >-
+          Number of commits to fetch. 0 indicates all history for all
+          branches and tags.
+        type: number
+        default: 1
+        required: false
+
+      lektor-project:
+        description: >-
+          Path to the .lektorproject file, or the directory containing it.
+        type: string
+        default: .
+
+      rsync-dest:
+        type: string
+        required: false
+        description: >
+          Destination for rsync deployment.
+
+          Default: taken from vars.RSYNC_DEST
+
+      environment:
+        type: string
+        required: false
+        description: >
+          Environment to pull secrets and variables from.
+
+      environment-url:
+        type: string
+        required: false
+        description: >
+          Environment URL (displayed on actions status page — only
+          works if environment is specified).
+
+          Default: vars.URL
+
+    secrets:
+      ssh-key:
+        description: SSH private key for deployment
+        required: false
+
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ inputs.environment-url || vars.URL }}
+    env:
+      LEKTOR_PROJECT: ${{ inputs.lektor-project || '.' }}
+      LEKTOR_OUTPUT_PATH: /tmp/lektor-output
+      RSYNC_DEST: ${{ inputs.rsync-dest || vars.RSYNC_DEST }}
+      do_deploy: >-
+        ${{
+        secrets.ssh-key && ( inputs.rsync-dest || vars.RSYNC_DEST )
+        }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: ${{ inputs.fetch-depth }}
+
+      - uses: actions/setup-python@v4
+        id: cpython
+        with:
+          python-version: ${{ inputs.python-version }}
+          cache: "pip"
+
+      - uses: actions/cache@v3
+        # cache lektor output. load the most recent cache,
+        # but write a new cache every run.
+        with:
+          path: ${{ env.LEKTOR_OUTPUT_PATH }}
+          key: "lektor-${{ github.ref_name }}-${{ github.run_number }}"
+          restore-keys: |
+            lektor-${{ github.ref_name }}-
+            lektor-
+
+      - name: Install requirements.txt
+        run: |
+          python -m pip install -U pip
+          python -m pip install -r requirements.txt
+
+      - run: pip freeze | paste -sd , -
+      - run: convert --version
+
+      - run: lektor build
+
+      - run: tree -a '${{ env.LEKTOR_OUTPUT_PATH }}'
+
+      - name: Start SSH agent
+        if: env.do_deploy
+        run: ssh-agent | sed -n 's/;.*//; /^SSH_[^ ]*=/ p' >> "$GITHUB_ENV"
+
+      - name: Add SSH key to agent
+        if: env.do_deploy
+        run: ssh-add - <<< "${{ secrets.ssh-key }}"
+
+      - name: Run rsync to deploy site
+        if: env.do_deploy
+        run: >-
+          rsync --recursive --checksum --links --verbose --delete-delay
+          --exclude=.lektor
+          "${{ env.LEKTOR_OUTPUT_PATH }}/"
+          "${{ inputs.rsync-dest || vars.RSYNC_DEST }}"
+        env:
+          RSYNC_RSH: ssh -o StrictHostKeyChecking=off
