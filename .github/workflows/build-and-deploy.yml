@@ -41,6 +41,12 @@ on:
         default: 1
         required: false
 
+      lfs:
+        description: >-
+          Whether to download Git-LFS files. Default: true
+        type: boolean
+        default: true
+
       lektor-project:
         description: >-
           Path to the .lektorproject file, or the directory containing it.
@@ -97,6 +103,7 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: ${{ inputs.fetch-depth }}
+          lfs: ${{ inputs.lfs }}
 
       - uses: actions/setup-python@v4
         id: cpython
